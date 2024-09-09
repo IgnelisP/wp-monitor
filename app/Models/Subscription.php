@@ -7,5 +7,8 @@ use Carbon\Carbon;
 
 class Subscription extends CashierSubscription
 {
-    
+    public function getRenewsAtAttribute()
+    {
+        return Carbon::parse($this->asStripeSubscription()->current_period_end);
+    }
 }
