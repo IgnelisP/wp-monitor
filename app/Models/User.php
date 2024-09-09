@@ -63,4 +63,12 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * Get all of the websites for the user.
+     */
+    public function websites()
+    {
+        return $this->hasMany(Website::class);
+    }
 }

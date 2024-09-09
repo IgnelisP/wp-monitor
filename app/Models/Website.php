@@ -19,4 +19,20 @@ class Website extends Model
         'path',
         'api_key',
     ];
+
+    /**
+     * Get the user that owns the website.
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the subscription associated with the website.
+     */
+    public function subscription()
+    {
+        return $this->hasOne(Subscription::class);
+    }
 }
