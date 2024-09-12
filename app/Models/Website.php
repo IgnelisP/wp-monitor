@@ -20,6 +20,12 @@ class Website extends Model
         'api_key',
     ];
 
+    // Return the full URL as stored in the database
+    public function getFullUrlAttribute()
+    {
+    return $this->scheme . $this->domain . $this->path;
+    }
+
     /**
      * Get the user that owns the website.
      */
