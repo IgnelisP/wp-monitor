@@ -13,9 +13,6 @@
           <a :href="website.full_url" class="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-600 truncate">
             {{ website.full_url }}
           </a>
-          <span v-if="website.renewal_date" class="block text-sm text-gray-600 dark:text-gray-400">
-            Renewal Date: {{ formatDate(website.renewal_date) }}
-          </span>
         </div>
       </div>
   
@@ -53,23 +50,18 @@
     </Link>
   </div>
     </li>
-  </template>
-  
-  <script setup>
-  import { defineProps } from 'vue';
-  import PrimaryButton from '@/Components/PrimaryButton.vue';
-  import { Link } from '@inertiajs/vue3';
-  
-  defineProps({
-    website: Object,
-  });
-  
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString();
-  };
-  </script>
-  
-  <style scoped>
-  /* Additional styling if needed */
-  </style>
-  
+</template>
+
+<script setup>
+import { defineProps } from 'vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import { Link } from '@inertiajs/vue3';
+
+defineProps({
+  website: Object,
+});
+</script>
+
+<style scoped>
+/* Additional styling if needed */
+</style>

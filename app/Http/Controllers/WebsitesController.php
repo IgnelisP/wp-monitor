@@ -8,6 +8,8 @@ use App\Models\Website;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
+use App\Services\PrometheusService;
 
 class WebsitesController extends Controller
 {
@@ -16,20 +18,18 @@ class WebsitesController extends Controller
      */
     public function index()
     {
-        // Fetch all websites for the authenticated user, including their associated subscription
+        // Fetch the authenticated user's websites without additional data
         $websites = auth()->user()
             ->websites()
-            ->with('subscription') // Eager load the subscription relationship
             ->get()
             ->map(function ($website) {
                 return [
                     'id' => $website->id,
                     'name' => $website->name,
                     'full_url' => $website->full_url, // Access the full URL using the accessor
-                    'renewal_date' => $website->subscription ? $website->subscription->renews_at : null, // Access the renewal date using the accessor
                 ];
             });
-
+    
         // Return the websites to the Inertia view
         return Inertia::render('Websites/Index', [
             'websites' => $websites,
@@ -53,7 +53,11 @@ class WebsitesController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(Request $request, PrometheusService $prometheusService)
     {
         // Validate the form input
         $request->validate([
@@ -73,7 +77,7 @@ class WebsitesController extends Controller
             $scheme .= '://';
         }
 
-        // Normalize the path: 
+        // Normalize the path:
         // 1. If it's empty, treat it as '/'
         // 2. Ensure a trailing slash for the root '/' or paths with directories, but not for non-directory paths.
         if ($path === '') {
@@ -136,111 +140,62 @@ class WebsitesController extends Controller
             'api_key' => $apiKey,
         ]);
 
-        // Now, send the website's full URL to the external API
-        try {
-            $externalApiKey = 'your_secret_api_key';  // Replace with your actual API key
-            $externalApiUrl = 'http://62.72.21.220:5000/add_target';  // Replace with your actual domain
+        // Now, use the PrometheusService to add the website's full URL
+        $added = $prometheusService->addTarget($website->full_url);
 
-            $response = Http::withHeaders([
-                'x-api-key' => $externalApiKey,
-                'Content-Type' => 'application/json',
-            ])->post($externalApiUrl, [
-                'url' => $website->full_url,
-            ]);
-
-            if ($response->failed()) {
-                // Handle API error
-                return redirect()->back()->withErrors(['api' => 'Failed to add website to external server.']);
-            }
-
-        } catch (\Exception $e) {
-            // Handle exception
-            return redirect()->back()->withErrors(['api' => 'An error occurred while adding the website to the external server: ' . $e->getMessage()]);
+        if (! $added) {
+            return redirect()->back()->withErrors(['api' => 'Failed to add website to external server.']);
         }
 
         // Redirect to the websites list with a success message
         return redirect()->route('websites.index')->with('success', 'Website added successfully!');
     }
 
-
-
     /**
      * Display the specified resource.
      */
-    public function show(Website $website)
-{
-    // Ensure the authenticated user owns the website
-    if ($website->user_id !== auth()->id()) {
-        abort(403); // Forbidden
-    }
-
-    // Load any necessary relationships or attributes
-    $website->load('subscription');
-
-    // Prepare the website data
-    $websiteData = [
-        'id' => $website->id,
-        'name' => $website->name,
-        'full_url' => $website->full_url,
-        'renewal_date' => $website->subscription ? $website->subscription->renews_at : null,
-    ];
-
-    // Fetch the last 20 status codes from Prometheus
-    try {
-        $prometheusBaseUrl = 'http://62.72.21.220:9090/api/v1/query';
-
-        // Use the same instant query as in your PHP project
-        $query = 'probe_http_status_code{instance="' . $website->full_url . '"}[1h]';
-
-        // Make the HTTP request to Prometheus API
-        $response = Http::get($prometheusBaseUrl, [
-            'query' => $query
-        ]);
-
-        if ($response->failed()) {
-            // Handle API error
-            $statusData = [];
-        } else {
-            $data = $response->json();
-
-            // Log raw Prometheus response for debugging
-            Log::info('Prometheus raw response:', $data);
-
-            // Check if data is present
-            if (isset($data['data']['result'][0]['values'])) {
-                $values = $data['data']['result'][0]['values'];
-
-                // Log raw values to ensure the timestamps are correct
-                Log::info('Prometheus values:', $values);
-
-                // Map the values to a more usable format (with UNIX timestamp)
-                $statusData = collect($values)->map(function ($item) {
-                    // Log the exact timestamp and status code for debugging
-                    Log::info('Processing Prometheus value:', ['timestamp' => $item[0], 'status_code' => $item[1]]);
-
-                    return [
-                        'time' => \Carbon\Carbon::createFromTimestampMs($item[0] * 1000)->toDateTimeString(), // Human-readable format
-                        'unix_time' => $item[0],  // UNIX timestamp as it is from Prometheus
-                        'status_code' => intval($item[1]), // Status code
-                    ];
-                })->reverse()->values()->take(20)->all(); // Get the last 20 entries
-            } else {
-                $statusData = [];
-            }
+    public function show(Request $request, Website $website, PrometheusService $prometheusService)
+    {
+        // Ensure the authenticated user owns the website
+        if ($website->user_id !== auth()->id()) {
+            abort(403); // Forbidden
         }
-    } catch (\Exception $e) {
-        // Handle exception
-        $statusData = [];
-        Log::error('Error fetching data from Prometheus:', ['error' => $e->getMessage()]);
+
+        // Load any necessary relationships or attributes
+        $website->load('subscription');
+
+        // Prepare the website data
+        $websiteData = [
+            'id' => $website->id,
+            'name' => $website->name,
+            'full_url' => $website->full_url,
+            'renewal_date' => $website->subscription ? $website->subscription->renews_at : null,
+        ];
+
+        // Get the end time from the request, default to now
+        $endTimeInput = $request->input('end_time');
+        $endTime = $endTimeInput ? Carbon::parse($endTimeInput) : Carbon::now();
+
+        // Get the start time from the request, default to one hour before end time
+        $startTimeInput = $request->input('start_time');
+        $startTime = $startTimeInput ? Carbon::parse($startTimeInput) : $endTime->copy()->subHour();
+
+        // Ensure startTime is before endTime
+        if ($startTime->greaterThan($endTime)) {
+            $startTime = $endTime->copy()->subHour();
+        }
+
+        // Now, use the PrometheusService to fetch the status data
+        $statusData = $prometheusService->fetchStatusData($website->full_url, $startTime, $endTime);
+
+        // Return the Inertia view with the website data and status data
+        return Inertia::render('Websites/Show', [
+            'website' => $websiteData,
+            'statusData' => $statusData,
+            'startTime' => $startTime->format('Y-m-d\TH:i'),
+            'endTime' => $endTime->format('Y-m-d\TH:i'),
+        ]);
     }
-
-    // Return the Inertia view with the website data and status data
-    return Inertia::render('Websites/Show', [
-        'website' => $websiteData,
-        'statusData' => $statusData,
-    ]);
-}
-
     
     
     

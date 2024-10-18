@@ -12,6 +12,41 @@
           <p><strong>Full URL:</strong> {{ website.full_url }}</p>
           <p><strong>Renewal Date:</strong> {{ website.renewal_date ? formatDate(website.renewal_date) : 'N/A' }}</p>
         </div>
+
+        <!-- Date-Time Picker Form -->
+    <div class="mt-6 bg-white dark:bg-gray-800 shadow-sm sm:rounded-lg p-6">
+      <h3 class="text-lg font-semibold mb-4">Select Time Range</h3>
+      <form method="GET" :action="route('websites.show', website.id)">
+        <div class="flex items-center space-x-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Time</label>
+            <input
+              type="datetime-local"
+              name="start_time"
+              v-model="startTimeRef"
+              class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Time</label>
+            <input
+              type="datetime-local"
+              name="end_time"
+              v-model="endTimeRef"
+              class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+            />
+          </div>
+          <div class="pt-6">
+            <button
+              type="submit"
+              class="inline-flex items-center px-4 py-2 bg-blue-500 text-white font-semibold rounded-md"
+            >
+              Submit
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
   
         <!-- Display status data -->
         <div class="mt-6 bg-white dark:bg-gray-800 shadow-sm sm:rounded-lg p-6">
@@ -42,14 +77,19 @@
 
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { defineProps } from 'vue';
+import { ref } from 'vue';
 
-defineProps({
+const { website, statusData, startTime, endTime } = defineProps({
   website: Object,
   statusData: Array,
+  startTime: String,
+  endTime: String,
 });
 
+const startTimeRef = ref(startTime);
+const endTimeRef = ref(endTime);
+
 const formatDate = (date) => {
-  return new Date(date).toLocaleString(); // Format to 24-hour format
+  return new Date(date).toLocaleString();
 };
 </script>
