@@ -53,7 +53,7 @@ class WebsitesController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    
+
     /**
      * Store a newly created resource in storage.
      */
@@ -154,48 +154,53 @@ class WebsitesController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Request $request, Website $website, PrometheusService $prometheusService)
-    {
-        // Ensure the authenticated user owns the website
-        if ($website->user_id !== auth()->id()) {
-            abort(403); // Forbidden
-        }
-
-        // Load any necessary relationships or attributes
-        $website->load('subscription');
-
-        // Prepare the website data
-        $websiteData = [
-            'id' => $website->id,
-            'name' => $website->name,
-            'full_url' => $website->full_url,
-            'renewal_date' => $website->subscription ? $website->subscription->renews_at : null,
-        ];
-
-        // Get the end time from the request, default to now
-        $endTimeInput = $request->input('end_time');
-        $endTime = $endTimeInput ? Carbon::parse($endTimeInput) : Carbon::now();
-
-        // Get the start time from the request, default to one hour before end time
-        $startTimeInput = $request->input('start_time');
-        $startTime = $startTimeInput ? Carbon::parse($startTimeInput) : $endTime->copy()->subHour();
-
-        // Ensure startTime is before endTime
-        if ($startTime->greaterThan($endTime)) {
-            $startTime = $endTime->copy()->subHour();
-        }
-
-        // Now, use the PrometheusService to fetch the status data
-        $statusData = $prometheusService->fetchStatusData($website->full_url, $startTime, $endTime);
-
-        // Return the Inertia view with the website data and status data
-        return Inertia::render('Websites/Show', [
-            'website' => $websiteData,
-            'statusData' => $statusData,
-            'startTime' => $startTime->format('Y-m-d\TH:i'),
-            'endTime' => $endTime->format('Y-m-d\TH:i'),
-        ]);
+    public function show(Request $request, Website $website, PrometheusService $prometheusService, WordPressController $wordpressController)
+{
+    // Ensure the authenticated user owns the website
+    if ($website->user_id !== auth()->id()) {
+        abort(403); // Forbidden
     }
+
+    // Load any necessary relationships or attributes
+    $website->load('subscription');
+
+    // Prepare the website data
+    $websiteData = [
+        'id' => $website->id,
+        'name' => $website->name,
+        'full_url' => $website->full_url,
+        'renewal_date' => $website->subscription ? $website->subscription->renews_at : null,
+    ];
+
+    // Get the end time from the request, default to now
+    $endTimeInput = $request->input('end_time');
+    $endTime = $endTimeInput ? Carbon::parse($endTimeInput) : Carbon::now();
+
+    // Get the start time from the request, default to one hour before end time
+    $startTimeInput = $request->input('start_time');
+    $startTime = $startTimeInput ? Carbon::parse($startTimeInput) : $endTime->copy()->subHour();
+
+    // Ensure startTime is before endTime
+    if ($startTime->greaterThan($endTime)) {
+        $startTime = $endTime->copy()->subHour();
+    }
+
+    // Fetch status data using the PrometheusService
+    $statusData = $prometheusService->fetchStatusData($website->full_url, $startTime, $endTime);
+
+    // Fetch plugins and themes using the WordPress API
+    $wordpressData = $wordpressController->fetchPluginsAndThemes($website);
+
+    // Return the Inertia view with the website data, status data, plugins, and themes
+    return Inertia::render('Websites/Show', [
+        'website' => $websiteData,
+        'statusData' => $statusData,
+        'plugins' => $wordpressData['plugins'],
+        'themes' => $wordpressData['themes'],
+        'startTime' => $startTime->format('Y-m-d\TH:i'),
+        'endTime' => $endTime->format('Y-m-d\TH:i'),
+    ]);
+}
     
     
     

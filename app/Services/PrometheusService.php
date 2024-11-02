@@ -71,7 +71,7 @@ class PrometheusService
             $prometheusQueryUrl = $this->queryBaseUrl . 'query_range';
 
             // Define the query resolution step (e.g., 1 minute)
-            $step = '60s';
+            $step = '300s';
 
             // Use the range query
             $query = 'probe_http_status_code{instance="' . $fullUrl . '"}';
